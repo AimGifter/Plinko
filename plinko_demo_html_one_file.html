@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plinko Demo – $100k Sandbox</title>
+  <style>
+    :root{
+      --bg:#0f1220;--panel:#151935;--panel-2:#1a1f44;--text:#e8ecff;--muted:#9aa4d6;--accent:#6ea8ff;--good:#34d399;--bad:#f87171;--warn:#fbbf24;
+      --peg:#2a2f63;--ball:#e5e7ff;--shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,Helvetica,sans-serif;background:radial-gradient(1200px 700px at 20% 0%,#19204b 0%,#0f1220 60%);color:var(--text);}
+    .wrap{max-width:1200px;margin:24px auto;padding:0 16px;display:grid;grid-template-columns:380px 1fr;gap:18px}
+
+    .card{background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 100%);border:1px solid rgba(255,255,255,.06);border-radius:18px;box-shadow:var(--shadow)}
+    .card h2{margin:0 0 10px;font-weight:700;letter-spacing:.2px}
+    .card .inner{padding:18px}
+
+    .controls{position:sticky;top:18px}
+    .row{display:flex;align-items:center;gap:10px;margin:10px 0}
+    label{font-size:14px;color:var(--muted);min-width:110px}
+    input[type=number],select{flex:1;background:#0e1331;border:1px solid #2a3170;color:var(--text);border-radius:10px;padding:10px 12px;font-size:15px;outline:none}
+    .balance{font-size:28px;font-weight:800;letter-spacing:.5px}
+    .mono{font-variant-numeric:tabular-nums}
+    .muted{color:var(--muted);font-size:13px}
+    .btns{display:flex;gap:10px;margin-top:12px}
+    button{appearance:none;border:0;background:var(--accent);color:#0b102a;padding:12px 14px;border-radius:12px;font-weight:800;cursor:pointer;transition:transform .05s ease,filter .2s}
+    button.secondary{background:#0e1331;color:var(--text);border:1px solid #2a3170}
+    button:active{transform:translateY(1px)}
+    button[disabled]{opacity:.5;cursor:not-allowed}
+
+    .payouts{margin-top:14px;border-top:1px dashed #2a3170;padding-top:12px}
+    .payouts h3{margin:0 0 8px;font-size:14px;color:var(--muted);font-weight:700}
+    .payout-grid{display:grid;grid-template-columns:repeat(17,1fr);gap:6px}
+    .payout-cell{background:#0e1331;border:1px solid #2a3170;border-radius:8px;text-align:center;padding:6px 4px;font-size:12px}
+    .payout-cell .x{display:block;font-weight:800}
+
+    .board{position:relative;height:680px;display:flex;align-items:center;justify-content:center}
+    .stage{position:relative;width:min(560px,90%);height:100%;}
+    .peg{position:absolute;width:8px;height:8px;border-radius:50%;background:var(--peg);opacity:.9;}
+    .bin{position:absolute;bottom:0;width:calc(100%/17);height:120px;border-top:2px solid #2a3170}
+    .bin::after{content:attr(data-x) "x";position:absolute;left:50%;transform:translateX(-50%);top:8px;color:var(--muted);font-size:12px}
+
+    .ball{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--ball);box-shadow:0 6px 18px rgba(0,0,0,.4);}
+    .toaster{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:50}
+    .toast{background:var(--panel);border:1px solid rgba(255,255,255,.08);padding:10px 14px;border-radius:12px;box-shadow:var(--shadow);font-weight:700}
+    .good{color:var(--good)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+    .note{font-size:12px;color:var(--muted);margin-top:6px}
+    .footer{grid-column:1/-1;text-align:center;color:var(--muted);font-size:12px;margin:6px 0}
+    @media (max-width:980px){.wrap{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card controls">
+      <div class="inner">
+        <h2>Plinko – Demo Only</h2>
+        <div class="muted">Sandbox balance</div>
+        <div class="balance mono" id="balance">$100,000.00</div>
+        <div class="row"><label>Bet size</label><input id="bet" type="number" min="1" step="1" value="100"/></div>
+        <div class="row"><label>Rows</label>
+          <select id="rows">
+            <option value="12">12</option>
+            <option value="14">14</option>
+            <option value="16" selected>16</option>
+            <option value="18">18</option>
+          </select>
+        </div>
+        <div class="row"><label>Risk</label>
+          <select id="risk">
+            <option value="low" selected>Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="btns">
+          <button id="drop">Drop 1 ball</button>
+          <button id="autoplay" class="secondary">Autoplay</button>
+        </div>
+        <div class="note">This is a <b>demo</b>. No real money. Expected return ~97% (house edge ~3%).</div>
+
+        <div class="payouts">
+          <h3>Payouts (× multiplier by bin)</h3>
+          <div id="payoutGrid" class="payout-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card board">
+      <div class="stage" id="stage"></div>
+    </div>
+
+    <div class="footer">© Demo Plinko. Educational use only. Gambling involves risk; comply with local laws & age limits.</div>
+  </div>
+
+  <div class="toaster" id="toaster"></div>
+
+  <script>
+    // ---------- Utilities ----------
+    const $ = sel => document.querySelector(sel);
+    const fmt = v => v.toLocaleString(undefined,{style:'currency',currency:'USD',minimumFractionDigits:2});
+    const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+    // ---------- State ----------
+    const state={ balance:100000, rows:16, risk:'low', bins:17, autoplay:false, dropping:false };
+
+    // ---------- Payout model (programmatic, scaled to target RTP) ----------
+    function binomial(n,k){
+      if(k<0||k>n) return 0;
+      let res=1; for(let i=1;i<=k;i++){res=res*(n+1-i)/i}
+      return res; // C(n,k)
+    }
+    function probs(n){
+      const tot=2**n; const arr=[]; for(let k=0;k<=n;k++){arr.push(binomial(n,k)/tot)} return arr;
+    }
+    function shapeMultiplier(n, risk){
+      // Higher beta => more extreme edges
+      const beta = risk==='low'?0.6: risk==='medium'?1.0:1.6;
+      const minFloor = risk==='high'?0.05: risk==='medium'?0.1:0.2; // minimum x
+      const center = n/2;
+      const raw=[];
+      for(let k=0;k<=n;k++){
+        const d=Math.abs(k-center)+1;
+        raw.push(Math.max(minFloor, Math.pow(d, beta)));
+      }
+      // Scale to desired RTP ~0.97
+      const p=probs(n);
+      const expectedRaw = raw.reduce((s,r,i)=>s+r*p[i],0);
+      const rtp=0.97; // 97% return
+      const scale=rtp/expectedRaw;
+      return raw.map(r=>+(r*scale).toFixed(4));
+    }
+
+    // ---------- Board rendering ----------
+    function buildBoard(){
+      const stage=$('#stage');
+      stage.innerHTML='';
+      const w=stage.clientWidth;
+      const h=stage.clientHeight;
+      const rows=state.rows;
+      const cols=rows+1; // pegs per last row
+      const vGap=h/(rows+4); // vertical spacing
+      const hGap=w/(cols+2); // horizontal spacing with margins
+
+      // render pegs
+      for(let r=0;r<rows;r++){
+        const y=(r+1)*vGap;
+        const pegs=r+1;
+        for(let c=0;c<pegs;c++){
+          const x=(c+1.5+(cols-pegs)/2)*hGap;
+          const peg=document.createElement('div');
+          peg.className='peg'; peg.style.left=(x-4)+'px'; peg.style.top=(y-4)+'px';
+          stage.appendChild(peg);
+        }
+      }
+
+      // render bins & payout labels
+      const payouts = shapeMultiplier(rows, state.risk);
+      state.payouts=payouts;
+      for(let b=0;b<=rows;b++){
+        const bin=document.createElement('div');
+        bin.className='bin';
+        bin.style.width=(100/(rows+1))+'%';
+        bin.style.left=(100*(b/(rows+1)))+'%';
+        bin.dataset.x = payouts[b].toFixed(2);
+        stage.appendChild(bin);
+      }
+
+      // Update side payout grid
+      const grid=$('#payoutGrid'); grid.innerHTML='';
+      payouts.forEach(x=>{
+        const cell=document.createElement('div');
+        cell.className='payout-cell';
+        cell.innerHTML=`<span class="x">${x.toFixed(2)}×</span>`;
+        grid.appendChild(cell);
+      });
+    }
+
+    // ---------- Game logic ----------
+    function toast(msg, kind=''){ const t=document.createElement('div'); t.className=`toast ${kind}`; t.textContent=msg; $('#toaster').appendChild(t); setTimeout(()=>t.remove(), 2200);}
+
+    async function dropOnce(){
+      if(state.dropping) return; state.dropping=true;
+      const bet = clamp(Math.floor(+$(`#bet`).value||0),1,1e9);
+      if(bet>state.balance){ toast('Insufficient balance','warn'); state.dropping=false; return; }
+      state.balance-=bet; updateBalance();
+
+      const rows=state.rows;
+      // plan path: at each row choose L/R (0/1). Bin = count of rights.
+      const path=[]; let rights=0;
+      for(let r=0;r<rows;r++){ const step = Math.random()<0.5?0:1; path.push(step); rights+=step; }
+      const bin=rights; const mult=state.payouts[bin]; const win=Math.round(bet*mult);
+
+      await animateBall(path);
+      state.balance+=win; updateBalance();
+      toast(`${win>0?'+':''}${fmt(win)} (${mult.toFixed(2)}×)`, win>bet? 'good' : (win<bet? 'bad' : ''));
+      state.dropping=false;
+    }
+
+    function updateBalance(){ $('#balance').textContent = fmt(state.balance); }
+
+    function animateBall(path){
+      return new Promise(resolve=>{
+        const stage=$('#stage');
+        const w=stage.clientWidth; const h=stage.clientHeight;
+        const rows=state.rows; const cols=rows+1;
+        const vGap=h/(rows+4); const hGap=w/(cols+2);
+        const centerX=(cols/2 + 1)*hGap; // start roughly centered
+        const ball=document.createElement('div'); ball.className='ball';
+        let x=centerX; let y=0; stage.appendChild(ball);
+        let rights=0;
+        const stepTime=85; // ms per row
+        function step(i){
+          if(i>=path.length){
+            // fall into bin
+            const bin=rights; const targetLeft=( (bin+1) * (w/(cols+1)) );
+            const finalY = h - 110;
+            ball.style.transition = `transform 280ms cubic-bezier(.2,.9,.3,1.2)`;
+            ball.style.transform = `translate(${targetLeft-7}px, ${finalY}px)`;
+            return setTimeout(()=>{ball.remove(); resolve();}, 310);
+          }
+          const dir = path[i]; rights+=dir;
+          x += (dir?1:-1)* (hGap/2);
+          y += vGap;
+          ball.style.transition = `transform ${stepTime}ms cubic-bezier(.25,.8,.25,1)`;
+          ball.style.transform = `translate(${x-7}px, ${y}px)`;
+          setTimeout(()=>step(i+1), stepTime);
+        }
+        step(0);
+      });
+    }
+
+    // ---------- Autoplay ----------
+    let autoTimer=null;
+    function toggleAuto(){
+      state.autoplay = !state.autoplay;
+      $('#autoplay').textContent = state.autoplay? 'Stop' : 'Autoplay';
+      if(state.autoplay){
+        const loop=async()=>{ if(!state.autoplay) return; if(!state.dropping) await dropOnce(); autoTimer=setTimeout(loop, 160); }; loop();
+      } else { clearTimeout(autoTimer); }
+    }
+
+    // ---------- Wiring ----------
+    function init(){
+      // Inputs
+      $('#rows').addEventListener('change', e=>{ state.rows=+e.target.value; buildBoard(); });
+      $('#risk').addEventListener('change', e=>{ state.risk=e.target.value; buildBoard(); });
+      $('#drop').addEventListener('click', dropOnce);
+      $('#autoplay').addEventListener('click', toggleAuto);
+      buildBoard(); updateBalance();
+    }
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
